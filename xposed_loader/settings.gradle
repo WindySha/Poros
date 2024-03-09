@@ -1,0 +1,4 @@
+include ':app'
+rootProject.name='xposed_module_loader'
+include ':core'
+

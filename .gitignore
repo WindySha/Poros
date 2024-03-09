@@ -1,0 +1,5 @@
+build
+dev
+output/
+.gradle/
+.vscode/

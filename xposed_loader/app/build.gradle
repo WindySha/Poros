@@ -1,0 +1,72 @@
+plugins {
+    id 'com.android.application'
+}
+
+def flavorsDebugNameList = ["release"]
+def flavorsDebugMergeDexList = ["mergeDexRelease"]
+def flavorsNameList = ["sandhook"]
+
+android {
+    compileSdkVersion 28
+    defaultConfig {
+        applicationId "com.storm.wind.xposed"
+        minSdkVersion 21
+        targetSdkVersion 30
+        versionCode version_code as Integer
+        versionName version_name
+
+        multiDexEnabled false
+
+        ndk {
+            abiFilters 'armeabi-v7a', 'arm64-v8a'
+        }
+    }
+    buildTypes {
+        debug {
+            debuggable true
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+        release {
+            debuggable false
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+//    applicationVariants.all { variant ->
+//        variant.outputs.all {
+//            outputFileName = "${variant.getFlavorName()}-${variant.versionName}.apk"
+//        }
+//    }
+}
+
+task copySandhookDexFile(type: Copy) {
+    def dexFilePath = "build/intermediates/dex/${flavorsDebugNameList[0]}/${flavorsDebugMergeDexList[0]}/out/classes.dex"
+    if (!new File(dexFilePath).exists()) {
+        dexFilePath = "build/intermediates/dex/${flavorsDebugNameList[0]}/${flavorsDebugMergeDexList[0]}/classes.dex"
+    }
+    from dexFilePath
+    rename "(.*).dex", "classes.dex"
+    into "target/${flavorsNameList[0]}"
+}
+
+task copySoFile(type: Copy) {
+    flavorsDebugNameList.forEach {
+        from "build/intermediates/merged_native_libs/${it}/out/lib"
+        rename '(.*).so', '$1.so'
+        into "target/"
+    }
+}
+
+tasks.whenTaskAdded { task ->
+    if (task.name == 'assembleRelease') {
+        assembleRelease.finalizedBy copySandhookDexFile
+        copySandhookDexFile.finalizedBy copySoFile
+    }
+}
+
+dependencies {
+    implementation fileTree(dir: 'libs', include: ['*.jar'])
+    implementation project(':core')
+}

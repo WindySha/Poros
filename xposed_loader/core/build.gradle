@@ -1,0 +1,39 @@
+apply plugin: 'com.android.library'
+
+
+Properties properties = new Properties()
+properties.load(project.rootProject.file('local.properties').newDataInputStream())
+def talking_sdk_key = properties.getProperty('talking_data_sdk_key')
+
+android {
+    compileSdkVersion 28
+    buildToolsVersion "26.0.3"
+
+    defaultConfig {
+        minSdkVersion 21
+        targetSdkVersion 28
+        buildConfigField "String", "Talking_Sdk_Key", "${talking_sdk_key}"
+    }
+    buildTypes {
+        debug {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+        release {
+            minifyEnabled true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+}
+
+dependencies {
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+
+//    implementation 'com.swift.sandhook:hooklib:4.2.0'
+//    implementation 'com.swift.sandhook:xposedcompat:4.2.0'
+
+    implementation(name: 'hooklib', ext: 'aar')
+    implementation(name: 'xposedcompat', ext: 'aar')
+
+    implementation 'com.jakewharton.android.repackaged:dalvik-dx:9.0.0_r3'
+}
