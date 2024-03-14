@@ -19,6 +19,7 @@ namespace poros {
 
     static ThreadLooper* main_thread_looper = nullptr;
     static bool sHasInjectedSuccess = false;
+    static constexpr bool kDoInjectionInMainThread = false;
 
     static void LoadXposedModules(JNIEnv* env) {
         jni::CallStaticMethodByJavaMethodInvoke(env, XPOSED_LOADER_ENTRY_CLASS_NAME, XPOSED_LOADER_ENTRY_METHOD_NAME);
@@ -147,34 +148,39 @@ namespace poros {
             return -1;
         }
 
-        // When ptrace reaches the JNI method Java_java_lang_Object_wait, issues of env->FindClass getting stuck due to waiting for locks may occur. Here, the Xposed module is loaded with a delay.
-        // When ptrace reaches the JNI method Java_com_android_internal_os_ClassLoaderFactory_createClassloaderNamespace, the ClassLoader is being constructed, and calling FindClass at this instance can lead to a deadlock
-        // To bypass these two methods, tasks are sent to the main thread's Handler for execution.
-        void* art_method = runtime::GetCurrentMethod(current_thread_ptr, false, false);
-        if (art_method != nullptr) {
-            std::string name = runtime::JniShortName(art_method);
-            LOGD("Currrent ptraced jni method name is : %s ", name.c_str());
-            if (strcmp(name.c_str(), "Java_java_lang_Object_wait") == 0
-                || strcmp(name.c_str(), "Java_com_android_internal_os_ClassLoaderFactory_createClassloaderNamespace") == 0) {
-                // load xposed modules after in the main message handler, this is later than application's attachBaseContext and onCreate method.
-                InjectXposedLibraryByHandler(env);
-                // InjectXposedLibraryAsync(env);  // like Frida, inject in another thread.
-                return 0;
+        // Do the injection in main thread is still an experiment yet, it may cause crashes, so we do it in another thread
+        if (!kDoInjectionInMainThread) {
+            InjectXposedLibraryAsync(env);
+        } else {
+            // When ptrace reaches the JNI method Java_java_lang_Object_wait, issues of env->FindClass getting stuck due to waiting for locks may occur. Here, the Xposed module is loaded with a delay.
+            // When ptrace reaches the JNI method Java_com_android_internal_os_ClassLoaderFactory_createClassloaderNamespace, the ClassLoader is being constructed, and calling FindClass at this instance can lead to a deadlock
+            // To bypass these two methods, tasks are sent to the main thread's Handler for execution.
+            void* art_method = runtime::GetCurrentMethod(current_thread_ptr, false, false);
+            if (art_method != nullptr) {
+                std::string name = runtime::JniShortName(art_method);
+                LOGD("Currrent ptraced jni method name is : %s ", name.c_str());
+                if (strcmp(name.c_str(), "Java_java_lang_Object_wait") == 0
+                    || strcmp(name.c_str(), "Java_com_android_internal_os_ClassLoaderFactory_createClassloaderNamespace") == 0
+                    || strcmp(name.c_str(), "Java_dalvik_system_DexFile_openDexFileNative") == 0) {
+                    // load xposed modules after in the main message handler, this is later than application's attachBaseContext and onCreate method.
+                    InjectXposedLibraryByHandler(env);
+                    // InjectXposedLibraryAsync(env);  // like Frida, inject in another thread.
+                    return 0;
+                }
             }
-        }
 
-        // If the inject time is very early, then, the loadedapk info and the app classloader is not ready, so we try to hook atrace_set_debuggable function to make sure 
-        // the injection is early enough and the classloader has also been created.
-        jobject loaded_apk_obj = jni::GetLoadedApkObj(env);
-        LOGD("Try to get the app loaded apk info, loadedapk jobject: %p", loaded_apk_obj);
+            // If the inject time is very early, then, the loadedapk info and the app classloader is not ready, so we try to hook atrace_set_debuggable function to make sure 
+            // the injection is early enough and the classloader has also been created.
+            jobject loaded_apk_obj = jni::GetLoadedApkObj(env);
+            LOGD("Try to get the app loaded apk info, loadedapk jobject: %p", loaded_apk_obj);
 
-        if (loaded_apk_obj == nullptr) {
-            // load xposed modules after atrace_set_debuggable or atrace_update_tags is called.
-            HookAtraceFunctions(OnAtraceFuncCalled);
-        }
-        else {
-            // loadedapk and classloader is ready, so load the xposed modules directly.
-            InjectXposedLibraryInternal(env);
+            if (loaded_apk_obj == nullptr) {
+                // load xposed modules after atrace_set_debuggable or atrace_update_tags is called.
+                HookAtraceFunctions(OnAtraceFuncCalled);
+            }             else {
+                // loadedapk and classloader is ready, so load the xposed modules directly.
+                InjectXposedLibraryInternal(env);
+            }
         }
         return 0;
     }

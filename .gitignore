@@ -3,3 +3,4 @@ dev
 output/
 .gradle/
 .vscode/
+.editorconfig
