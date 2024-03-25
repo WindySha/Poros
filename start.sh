@@ -6,8 +6,9 @@ is_32_bit_app=0
 use_quick_mode=0
 xposed_module_plugin_apk_path="null"
 packageName=""
+use_non_ptrace_mode=0
 
-while getopts ":p:f:xhq" opt; do
+while getopts ":p:f:xhq:m" opt; do
   case $opt in
     p)
       packageName=$OPTARG
@@ -18,6 +19,9 @@ while getopts ":p:f:xhq" opt; do
     q) 
       use_quick_mode=1
       ;;
+    m) 
+      use_non_ptrace_mode=1
+      ;;
     h) 
       echo "
 Usage: ./start.sh -p package_name -f xxx.apk -h -q
@@ -26,6 +30,7 @@ Options:
   -p [package name]      the package name to be injected  
   -f [apk path]          the xposed module apk path
   -h                     display this help message
+  -m                     do the injection without ptrace, using /proc/mem, only aarch64 is supported
   -q                     use quick mode, do not inject the xposed dex and so file, this can only used when it is not the first time to inject target app.
   "
       exit 0
@@ -157,16 +162,26 @@ if [ ${is_32_bit_app} == 1 ]; then
     injector_path="/injector/armeabi-v7a/xinjector"
     native_injector_path="/glue/armeabi-v7a/libinjector-glue.so"
 else
-    injector_path="/injector/arm64-v8a/xinjector"
+    if [ ${use_non_ptrace_mode} == 1 ]; then
+      injector_path="/injector/arm64-v8a/linjector-cli"
+    else 
+      injector_path="/injector/arm64-v8a/xinjector"
+    fi
     native_injector_path="/glue/arm64-v8a/libinjector-glue.so"
 fi
 
 if [ ${use_quick_mode} == 0 ]; then
-    adb push $work_dir$injector_path $tmp_path
     adb push $work_dir$native_injector_path $tmp_path
 fi
+adb push $work_dir$injector_path $tmp_path
 
-adb shell su $root_cmd .${tmp_path}/${injector_path##*/} ${packageName} ${tmp_path}/${native_injector_path##*/}
+if [ ${is_32_bit_app} == 0 ] && [ ${use_non_ptrace_mode} == 1 ]; then
+  adb shell su $root_cmd "chmod 755" ${tmp_path}/${injector_path##*/}
+  adb shell su $root_cmd .${tmp_path}/${injector_path##*/} "-a" ${packageName} "-f" ${tmp_path}/${native_injector_path##*/}
+else 
+  adb shell su $root_cmd "chmod 755" ${tmp_path}/${injector_path##*/}
+  adb shell su $root_cmd .${tmp_path}/${injector_path##*/} ${packageName} ${tmp_path}/${native_injector_path##*/}
+fi
 
 echo "Inject xposed plugin success."
 

@@ -1,3 +1,8 @@
 name = Xinjector
 url = https://github.com/WindySha/XInjector.git
 branch = master
+
+name = linjector-rs
+url = https://github.com/erfur/linjector-rs
+branch = main
+version = 0.1.2
