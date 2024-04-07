@@ -1,0 +1,25 @@
+[package]
+name = "poros"
+version = "0.1.0"
+description = "This is a tool used to inject code into android applications."
+authors = ["WindySha"]
+repository = "https://github.com/WindySha/Poros"
+license = "Apache License 2.0"
+edition = "2021"
+
+[dependencies]
+clap = { version = "4.4.7", features = ["derive"] }
+include_dir = "0.7.3"
+subprocess = "0.2.9"
+anyhow = "1.0.57"
+tempfile = "3.10.1"
+
+
+[profile.release]
+opt-level = "z"
+debug = false
+lto = true
+debug-assertions = false
+codegen-units = 1
+panic = "abort"
+strip = true
