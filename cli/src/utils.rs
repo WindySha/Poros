@@ -5,7 +5,8 @@ use subprocess::{Exec, Redirection};
 
 use include_dir::{include_dir, Dir};
 
-static PROJECT_DIR: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/assets");
+// static PROJECT_DIR: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/assets");
+static PROJECT_DIR: Dir<'_> = include_dir!("assets");
 
 pub fn execute(cmd: impl Into<String>) -> Result<(bool, String)> {
     let command = cmd.into();

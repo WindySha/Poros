@@ -1,10 +1,7 @@
 #!/bin/bash
 echo "use cmake to build project"
 
-android_sdk_path="${HOME}/Library/Android/sdk"
-ndk_version="22.0.7026061"
-cmake_version="3.10.2.4988404"
-android_ndk_path="$android_sdk_path/ndk/$ndk_version"
+# ANDROID_NDK_HOME="${HOME}/Library/Android/sdk/ndk/22.0.7026061"
 cur_dir=$(cd `dirname $0`; pwd)
 
 echo "cur_dir : $cur_dir"
@@ -28,22 +25,18 @@ for value in "${build_type_array[@]}"; do
   cd $build_dir
   
   echo "start build $value"
-  
-  $android_sdk_path/cmake/$cmake_version/bin/cmake \
+  echo ${ANDROID_NDK_HOME}
+
+  cmake \
     -DANDROID_ABI=$value \
     -DCMAKE_BUILD_TYPE=Release \
-    -DCMAKE_C_FLAGS="-s" \
-    -DCMAKE_CXX_FLAGS="-s" \
-    -DCMAKE_TOOLCHAIN_FILE=$android_ndk_path/build/cmake/android.toolchain.cmake \
-    -DANDROID_NDK=$android_ndk_path \
-    -DCMAKE_ANDROID_NDK=$android_ndk_path \
+    -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake \
+    -DANDROID_NDK=$ANDROID_NDK_HOME \
     -DANDROID_PLATFORM=android-21 \
-    -DANDROID_TOOLCHAIN=clang \
-    -DCMAKE_GENERATOR="Ninja" \
-    -DCMAKE_MAKE_PROGRAM=$android_sdk_path/cmake/$cmake_version/bin/ninja \
     -DANDROID_STL=c++_static \
     $cur_dir \
+
+  cmake --build .
   
-  $android_sdk_path/cmake/$cmake_version/bin/ninja
 done
 

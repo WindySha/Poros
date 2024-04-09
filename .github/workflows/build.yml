@@ -1,29 +1,156 @@
-name: Android CI
+name: Poros Priject CI
 
 on:
   push:
-    branches: [ "master" ]
-  pull_request:
-    branches: [ "master" ]
+    tags:
+      - "*"
 
 jobs:
-  build:
-
+  build_android_and_glue:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v3
-    - name: set up JDK 11
-      uses: actions/setup-java@v3
-      with:
-        java-version: '11'
-        distribution: 'temurin'
-        cache: gradle
+      - uses: actions/checkout@v4
 
-    - name: Enter android project directory
-      run: cd xposed_loader
-    - name: Build with Gradle
-    - name: Grant execute permission for gradlew
-      run: chmod +x gradlew
-    - name: Build with Gradle
-      run: ./gradlew clean assembleDebug
+      - name: set up JDK 11
+        uses: actions/setup-java@v4
+        with:
+          java-version: '11'
+          distribution: 'temurin'
+
+      - name: Set up Android SDK
+        if: ${{ env.ACT }} # Only run on local act setups, as GitHub Actions provides the Android SDK on Ubuntu
+        uses: android-actions/setup-android@v2
+
+      - name: Create local.properties with SDK path
+        working-directory: ./xposed_loader
+        run: |
+           echo "sdk.dir=/usr/local/lib/android/sdk" > local.properties    
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+      - name: Build with Gradle
+        working-directory: ./xposed_loader
+        run: ./gradlew assembleDebug
+
+
+      - name: Install CMake
+        if: ${{ env.ACT }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake
+
+      - name: Setup Android NDK R25
+        uses: nttld/setup-ndk@v1
+        id: setup-ndk
+        with:
+          ndk-version: r25c
+          add-to-path: false
+
+      - name: build ndk project
+        working-directory: ./core
+        run: ./build.sh
+        env:
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+
+      - name: copy and compress binary and dex files
+        run: ./copy_files.sh
+
+      - name: Upload script files to release
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: poros_shell_cmd.tar.gz
+          asset_name: poros_shell_cmd.tar.gz
+          tag: ${{ github.ref }}
+          overwrite: true
+
+      - name: Upload build products to artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          path: output/
+          name: build_assets
+          retention-days: 1
+          if-no-files-found: error
+
+
+  release_cli:
+    needs: [build_android_and_glue]
+    name: Release - ${{ matrix.platform.release_for }}
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - release_for: Linux-x86_64
+            os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            bin: poros
+            name: poros-Linux-x86_64
+            command: build
+
+          - release_for: Windows-x86_64
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+            bin: poros.exe
+            name: poros-Windows-x86_64.exe
+            command: build
+
+          - release_for: macOS-x86_64
+            os: macOS-latest
+            target: x86_64-apple-darwin
+            bin: poros
+            name: poros-Darwin-x86_64
+            command: build
+
+          - release_for: macOS-aarch64
+            os: macOS-latest
+            target: aarch64-apple-darwin
+            bin: poros
+            name: poros-Darwin-aarch64
+            command: build
+
+    runs-on: ${{ matrix.platform.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Copy build files from artifact
+        run:   |
+         if [ "$RUNNER_OS" == "Windows" ]; then
+           rm -rf cli/assets
+           mkdir -p cli/assets
+         else
+           rm -rf cli/assets
+           mkdir -p cli/assets
+         fi
+        shell: bash
+          
+      - name: Download build products from artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build_assets
+          path: cli/assets
+
+      - name: Build binary
+        uses: houseabsolute/actions-rust-cross@v0
+        with:
+          working-directory: ./cli
+          command: ${{ matrix.platform.command }}
+          target: ${{ matrix.platform.target }}
+          args: "--locked --release"
+          strip: true
+
+      - name: Upload binaries to release
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: cli/target/${{ matrix.platform.target }}/release/${{ matrix.platform.bin }}
+          asset_name: ${{ matrix.platform.name }}
+          tag: ${{ github.ref }}
+          overwrite: true
+
+
+
+
+  
