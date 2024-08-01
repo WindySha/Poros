@@ -38,7 +38,7 @@ fn main() -> Result<()> {
 
     let root_cmd = get_root_cmd();
 
-    let is_32_bit_app = is_32_bit_app(&root_cmd, &args.package_name);
+    let is_32_bit_app = is_32_bit_app(&args.package_name);
     println!(" is_32_bit_app = {}", is_32_bit_app);
 
     let device_tmp_path = "/data/local/tmp";
@@ -151,19 +151,21 @@ fn get_root_cmd() -> String {
         return (false, "unknow".to_string());
     });
 
-    return if su_result.0 && (su_result.1.contains("MAGISKSU") || su_result.1.contains("KernelSU")) {
-            println!("Use command: adb shell su -c");
-            "-c".to_string()
-        } else {
-            println!("Use command: adb shell su root");
-            "root".to_string()
-        };
+    return if su_result.0 && (su_result.1.contains("MAGISKSU") || su_result.1.contains("KernelSU"))
+    {
+        println!("Use command: adb shell su -c");
+        "-c".to_string()
+    } else {
+        println!("Use command: adb shell su root");
+        "root".to_string()
+    };
 }
 
-fn is_32_bit_app(root_cmd: &String, package_name: &str) -> bool {
-    let pm_path_result = execute(format!("adb shell pm path {}", package_name)).unwrap_or_else(|_| {
-        return (false, "".to_string());
-    });
+fn is_32_bit_app(package_name: &str) -> bool {
+    let pm_path_result =
+        execute(format!("adb shell pm path {}", package_name)).unwrap_or_else(|_| {
+            return (false, "".to_string());
+        });
 
     if !pm_path_result.0 || pm_path_result.1.is_empty() {
         println!("Package: {} not found.", package_name);
@@ -181,19 +183,22 @@ fn is_32_bit_app(root_cmd: &String, package_name: &str) -> bool {
 
     let mut is_32_bit_app = false;
 
-    let dir_exist_result = execute(format!(
-        "adb shell su {} ls {}/oat/arm",
-        root_cmd, installed_directory
-    )).unwrap();
+    let command = format!(
+        "adb shell 'if [ -d {}/lib/oat ]; then echo \"exists\"; else echo \"not exists\"; fi'",
+        installed_directory
+    );
 
-    if dir_exist_result.0 {
+    let dir_exist_result = execute(command).unwrap_or((false, "".to_string()));
+
+    if dir_exist_result.0 && dir_exist_result.1.trim() == "exists" {
         is_32_bit_app = true;
     } else {
-        let dir_exist_result = execute(format!(
-            "adb shell su {} ls {}/lib/arm",
-            root_cmd, installed_directory
-        )).unwrap();
-        if dir_exist_result.0 {
+        let command = format!(
+            "adb shell 'if [ -d {}/lib/arm ]; then echo \"exists\"; else echo \"not exists\"; fi'",
+            installed_directory
+        );
+        let dir_exist_result = execute(command).unwrap_or((false, "".to_string()));
+        if dir_exist_result.0 && dir_exist_result.1.trim() == "exists" {
             is_32_bit_app = true;
         }
     }
