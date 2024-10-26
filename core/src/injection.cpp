@@ -45,6 +45,11 @@ namespace poros {
         const char* temp_dex_file_path = "/data/local/tmp/classes.dex";
         poros::copy_file(temp_dex_file_path, dex_apth.c_str());
 
+        // 修改文件权限为不可写
+        if (chmod(dex_apth.c_str(), S_IRUSR | S_IRGRP | S_IROTH) != 0) {
+            LOGE("Failed to change dex file to not writable.");
+        }
+
         std::string so_apth;
         const char* temp_sandhook_so_path;
         if (poros::Is64BitRuntime()) {
@@ -66,7 +71,13 @@ namespace poros {
 
         auto target_plugin_apk_path = target_plugin_apk_dir + "/xposed_plugin.apk";
         const char* temp_plugin_apk_path = "/data/local/tmp/xposed_plugin.apk";
+        std::remove(target_plugin_apk_path.c_str());
         poros::copy_file(temp_plugin_apk_path, target_plugin_apk_path.c_str());
+
+        // 修改文件权限为不可写
+        if (chmod(target_plugin_apk_path.c_str(), S_IRUSR | S_IRGRP | S_IROTH) != 0) {
+            LOGE("Failed to change apk plugin file to not writable.");
+        }
 
         jni::MergeDexAndSoToClassLoader(env, dex_apth.c_str(), so_apth.c_str());
 
