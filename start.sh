@@ -7,8 +7,9 @@ use_quick_mode=0
 xposed_module_plugin_apk_path="null"
 packageName=""
 use_non_ptrace_mode=0
+main_thread_injection=0
 
-while getopts ":p:f:xhq:m" opt; do
+while getopts ":p:f:xhqmn" opt; do
   case $opt in
     p)
       packageName=$OPTARG
@@ -22,6 +23,9 @@ while getopts ":p:f:xhq:m" opt; do
     m) 
       use_non_ptrace_mode=1
       ;;
+    n) 
+      main_thread_injection=1
+      ;;
     h) 
       echo "
 Usage: ./start.sh -p package_name -f xxx.apk -h -q
@@ -31,6 +35,7 @@ Options:
   -f [apk path]          the xposed module apk path
   -h                     display this help message
   -m                     do the injection without ptrace, using /proc/mem, only aarch64 is supported
+  -n                     inject the plugin on the main thread, this is not very stable.
   -q                     use quick mode, do not inject the xposed dex and so file, this can only used when it is not the first time to inject target app.
   "
       exit 0
@@ -175,6 +180,12 @@ if [ ${use_quick_mode} == 0 ]; then
 fi
 adb push $work_dir$injector_path $tmp_path
 
+main_thread_injection_flag_file_path="$tmp_path/.do_main_thread_injection_flag"
+
+if [ ${main_thread_injection} == 1 ]; then
+  adb shell su $root_cmd "touch" $main_thread_injection_flag_file_path
+fi
+
 if [ ${is_32_bit_app} == 0 ] && [ ${use_non_ptrace_mode} == 1 ]; then
   adb shell su $root_cmd "chmod 755" ${tmp_path}/${injector_path##*/}
   adb shell su $root_cmd .${tmp_path}/${injector_path##*/} "-a" ${packageName} "-f" ${tmp_path}/${native_injector_path##*/}
@@ -182,6 +193,7 @@ else
   adb shell su $root_cmd "chmod 755" ${tmp_path}/${injector_path##*/}
   adb shell su $root_cmd .${tmp_path}/${injector_path##*/} ${packageName} ${tmp_path}/${native_injector_path##*/}
 fi
+adb shell su $root_cmd "rm" $main_thread_injection_flag_file_path
 
 echo "Inject xposed plugin success."
 

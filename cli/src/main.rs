@@ -24,9 +24,13 @@ struct Args {
     #[arg(short = 'q', long)]
     quick: bool,
 
-    /// whether use the non-ptrace mode
+    /// whether use the non-ptrace mode, using /proc/mem, only aarch64 is supported
     #[arg(short = 'm', long)]
     non_ptrace: bool,
+
+    /// whether inject the plugin on the main thread,  this is not very stable.
+    #[arg(short = 'n', long)]
+    main_thread_injection: bool,
 }
 
 fn main() -> Result<()> {
@@ -115,6 +119,17 @@ fn main() -> Result<()> {
             device_tmp_path
         ))?;
     }
+
+    let main_thread_injection_flag_file_path = format!("{}/.do_main_thread_injection_flag", device_tmp_path);
+
+    if args.main_thread_injection {
+        // create do_main_thread_injection_flag file to indicate that we do the injection on the main thread.
+        execute(format!(
+            "adb shell su {} touch {}",
+            root_cmd, main_thread_injection_flag_file_path
+        ))?;
+    }
+
     // execute the injector command
     if !is_32_bit_app && args.non_ptrace {
         execute(format!(
@@ -135,6 +150,10 @@ fn main() -> Result<()> {
             root_cmd, device_tmp_path, args.package_name, device_tmp_path
         ))?;
     }
+    execute(format!(
+        "adb shell su {} rm {}",
+        root_cmd, main_thread_injection_flag_file_path
+    ))?;
     Ok(())
 }
 

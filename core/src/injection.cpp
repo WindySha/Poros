@@ -19,10 +19,14 @@ namespace poros {
 
     static ThreadLooper* main_thread_looper = nullptr;
     static bool sHasInjectedSuccess = false;
-    static constexpr bool kDoInjectionInMainThread = false;
+    static const char* kMainThreadInjectionFlagFilePath = "/data/local/tmp/.do_main_thread_injection_flag";
 
     static void LoadXposedModules(JNIEnv* env) {
         jni::CallStaticMethodByJavaMethodInvoke(env, XPOSED_LOADER_ENTRY_CLASS_NAME, XPOSED_LOADER_ENTRY_METHOD_NAME);
+    }
+    
+    static bool IsMainThreadInjectionFlagFileExist() {
+        return access(kMainThreadInjectionFlagFilePath, F_OK) == 0;
     }
 
     static void InjectXposedLibraryInternal(JNIEnv* env) {
@@ -147,6 +151,9 @@ namespace poros {
     int DoInjection(JNIEnv* env) {
         LOGE("DoInjection!!");
 
+        bool is_main_thread_injection = IsMainThreadInjectionFlagFileExist();
+        std::remove(kMainThreadInjectionFlagFilePath);
+
         runtime::InitRuntime();
 
         void* current_thread_ptr = nullptr;
@@ -160,7 +167,7 @@ namespace poros {
         }
 
         // Do the injection in main thread is still an experiment yet, it may cause crashes, so we do it in another thread
-        if (!kDoInjectionInMainThread) {
+        if (!is_main_thread_injection) {
             InjectXposedLibraryAsync(env);
         } else {
             // When ptrace reaches the JNI method Java_java_lang_Object_wait, issues of env->FindClass getting stuck due to waiting for locks may occur. Here, the Xposed module is loaded with a delay.
