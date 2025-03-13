@@ -138,7 +138,7 @@ jobs:
           working-directory: ./cli
           command: ${{ matrix.platform.command }}
           target: ${{ matrix.platform.target }}
-          args: "--locked --release"
+          args: "--release"
           strip: true
 
       - name: Upload binaries to release
