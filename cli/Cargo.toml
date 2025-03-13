@@ -1,6 +1,6 @@
 [package]
 name = "poros"
-version = "0.1.0"
+version = "0.1.5"
 description = "This is a tool used to inject code into android applications."
 authors = ["WindySha"]
 repository = "https://github.com/WindySha/Poros"
