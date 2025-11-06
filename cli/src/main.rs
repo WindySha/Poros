@@ -25,11 +25,11 @@ struct Args {
     quick: bool,
 
     /// whether use the non-ptrace mode, using /proc/mem, only aarch64 is supported
-    #[arg(short = 'm', long)]
+    #[arg(short = 'n', long)]
     non_ptrace: bool,
 
     /// whether inject the plugin on the main thread,  this is not very stable.
-    #[arg(short = 'n', long)]
+    #[arg(short = 'm', long)]
     main_thread_injection: bool,
 
     /// whether restart the app before injection

@@ -21,10 +21,10 @@ while getopts ":p:f:xhqmnr" opt; do
     q) 
       use_quick_mode=1
       ;;
-    m) 
+    n) 
       use_non_ptrace_mode=1
       ;;
-    n) 
+    m) 
       main_thread_injection=1
       ;;
     r)

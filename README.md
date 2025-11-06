@@ -35,7 +35,7 @@ Options:
   -p, --package-name <PACKAGE_NAME>  target application's package name
   -f, --file-path <FILE_PATH>        path of the xposed plugin to inject
   -q, --quick                        whether use the quick mode
-  -m, --non-ptrace                   whether use the non-ptrace mode
+  -n, --non-ptrace                   whether use the non-ptrace mode
   -h, --help                         Print help
   -V, --version                      Print version
 ```
