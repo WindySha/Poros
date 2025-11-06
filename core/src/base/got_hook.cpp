@@ -83,8 +83,14 @@ namespace poros {
                         if (got_item == (uintptr_t)original_func_addr) {
                             got_found = 1;
 
-                            void* address_page = (void*)(addr & PAGE_MASK);
-                            mprotect(address_page, PAGE_SIZE, PROT_READ | PROT_WRITE);
+                            // Get page size dynamically
+                            long page_size = sysconf(_SC_PAGESIZE);
+                            if (page_size <= 0) {
+                                page_size = 4096; // Fallback to 4KB if sysconf fails
+                            }
+                            uintptr_t page_mask = ~(page_size - 1);
+                            void* address_page = (void*)(addr & page_mask);
+                            mprotect(address_page, page_size, PROT_READ | PROT_WRITE);
 
                             *(void**)(addr) = (void*)replace;
                             break;

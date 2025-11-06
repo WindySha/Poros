@@ -31,6 +31,10 @@ struct Args {
     /// whether inject the plugin on the main thread,  this is not very stable.
     #[arg(short = 'n', long)]
     main_thread_injection: bool,
+
+    /// whether restart the app before injection
+    #[arg(short = 'r', long)]
+    restart: bool,
 }
 
 fn main() -> Result<()> {
@@ -136,19 +140,27 @@ fn main() -> Result<()> {
             "adb shell su {} chmod 755 {}/linjector-cli",
             root_cmd, device_tmp_path
         ))?;
+        let restart_flag = if args.restart { "-r " } else { "" };
         execute(format!(
-            "adb shell su {} .{}/linjector-cli -a {} -f {}/libinjector-glue.so",
-            root_cmd, device_tmp_path, args.package_name, device_tmp_path
+            "adb shell su {} .{}/linjector-cli {}-a {} -f {}/libinjector-glue.so",
+            root_cmd, device_tmp_path, restart_flag, args.package_name, device_tmp_path
         ))?;
     } else {
         execute(format!(
             "adb shell su {} chmod 755 {}/xinjector",
             root_cmd, device_tmp_path
         ))?;
-        execute(format!(
-            "adb shell su {} .{}/xinjector {} {}/libinjector-glue.so",
-            root_cmd, device_tmp_path, args.package_name, device_tmp_path
-        ))?;
+        if args.restart {
+            execute(format!(
+                "adb shell su {} .{}/xinjector -r {} {}/libinjector-glue.so",
+                root_cmd, device_tmp_path, args.package_name, device_tmp_path
+            ))?;
+        } else {
+            execute(format!(
+                "adb shell su {} .{}/xinjector {} {}/libinjector-glue.so",
+                root_cmd, device_tmp_path, args.package_name, device_tmp_path
+            ))?;
+        }
     }
     execute(format!(
         "adb shell su {} rm {}",
