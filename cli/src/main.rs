@@ -35,18 +35,25 @@ struct Args {
     /// whether restart the app before injection
     #[arg(short = 'r', long)]
     restart: bool,
+
+    /// serial number of the target device, the same as `adb -s <SERIAL>`,
+    /// it can be ignored when only one device is connected
+    #[arg(short = 's', long)]
+    serial: Option<String>,
 }
 
 fn main() -> Result<()> {
     let args = Args::parse();
 
-    if !is_device_connected() {
-        return Err(Error::msg("Failed to connect to device"));
+    let adb = &adb_command(&args.serial);
+
+    if !is_device_connected(adb) {
+        return Err(Error::msg(device_connection_error(&args.serial)));
     }
 
-    let root_cmd = get_root_cmd();
+    let root_cmd = get_root_cmd(adb);
 
-    let is_32_bit_app = is_32_bit_app(&args.package_name);
+    let is_32_bit_app = is_32_bit_app(adb, &args.package_name);
     println!(" is_32_bit_app = {}", is_32_bit_app);
 
     let device_tmp_path = "/data/local/tmp";
@@ -60,9 +67,10 @@ fn main() -> Result<()> {
             return Err(Error::msg("Plugin file name not found"));
         };
 
-        execute(format!("adb push {} {}", plugin_path, device_tmp_path))?;
+        execute(format!("{} push {} {}", adb, plugin_path, device_tmp_path))?;
         execute(format!(
-            "adb shell su {} mv {}/{} {}/xposed_plugin.apk",
+            "{} shell su {} mv {}/{} {}/xposed_plugin.apk",
+            adb,
             root_cmd,
             device_tmp_path,
             plugin_apk_file_name.to_str().unwrap(),
@@ -87,12 +95,14 @@ fn main() -> Result<()> {
         }
         // push dex and so file into the device
         execute(format!(
-            "adb push {} {}",
+            "{} push {} {}",
+            adb,
             xposed_loader_dex_path.to_string_lossy(),
             device_tmp_path
         ))?;
         execute(format!(
-            "adb push {} {}",
+            "{} push {} {}",
+            adb,
             xposed_loader_so_path.to_string_lossy(),
             device_tmp_path
         ))?;
@@ -113,12 +123,14 @@ fn main() -> Result<()> {
         }
         // push injector and injected file into the device
         execute(format!(
-            "adb push {} {}",
+            "{} push {} {}",
+            adb,
             injector_path.to_string_lossy(),
             device_tmp_path
         ))?;
         execute(format!(
-            "adb push {} {}",
+            "{} push {} {}",
+            adb,
             native_injector_path.to_string_lossy(),
             device_tmp_path
         ))?;
@@ -129,56 +141,96 @@ fn main() -> Result<()> {
     if args.main_thread_injection {
         // create do_main_thread_injection_flag file to indicate that we do the injection on the main thread.
         execute(format!(
-            "adb shell su {} touch {}",
-            root_cmd, main_thread_injection_flag_file_path
+            "{} shell su {} touch {}",
+            adb, root_cmd, main_thread_injection_flag_file_path
         ))?;
     }
 
     // execute the injector command
     if !is_32_bit_app && args.non_ptrace {
         execute(format!(
-            "adb shell su {} chmod 755 {}/linjector-cli",
-            root_cmd, device_tmp_path
+            "{} shell su {} chmod 755 {}/linjector-cli",
+            adb, root_cmd, device_tmp_path
         ))?;
         let restart_flag = if args.restart { "-r " } else { "" };
         execute(format!(
-            "adb shell su {} .{}/linjector-cli {}-a {} -f {}/libinjector-glue.so",
-            root_cmd, device_tmp_path, restart_flag, args.package_name, device_tmp_path
+            "{} shell su {} .{}/linjector-cli {}-a {} -f {}/libinjector-glue.so",
+            adb, root_cmd, device_tmp_path, restart_flag, args.package_name, device_tmp_path
         ))?;
     } else {
         execute(format!(
-            "adb shell su {} chmod 755 {}/xinjector",
-            root_cmd, device_tmp_path
+            "{} shell su {} chmod 755 {}/xinjector",
+            adb, root_cmd, device_tmp_path
         ))?;
         if args.restart {
             execute(format!(
-                "adb shell su {} .{}/xinjector -r {} {}/libinjector-glue.so",
-                root_cmd, device_tmp_path, args.package_name, device_tmp_path
+                "{} shell su {} .{}/xinjector -r {} {}/libinjector-glue.so",
+                adb, root_cmd, device_tmp_path, args.package_name, device_tmp_path
             ))?;
         } else {
             execute(format!(
-                "adb shell su {} .{}/xinjector {} {}/libinjector-glue.so",
-                root_cmd, device_tmp_path, args.package_name, device_tmp_path
+                "{} shell su {} .{}/xinjector {} {}/libinjector-glue.so",
+                adb, root_cmd, device_tmp_path, args.package_name, device_tmp_path
             ))?;
         }
     }
     execute(format!(
-        "adb shell su {} rm {}",
-        root_cmd, main_thread_injection_flag_file_path
+        "{} shell su {} rm {}",
+        adb, root_cmd, main_thread_injection_flag_file_path
     ))?;
     Ok(())
 }
 
-fn is_device_connected() -> bool {
-    let std::result::Result::Ok(state) = execute("adb get-state") else {
+// adb   or   adb -s <serial>
+fn adb_command(serial: &Option<String>) -> String {
+    match serial {
+        Some(serial) => format!("adb -s {}", serial),
+        None => "adb".to_string(),
+    }
+}
+
+// list the serial numbers of all the connected devices
+fn connected_devices() -> Vec<String> {
+    let std::result::Result::Ok((true, output)) = execute("adb devices") else {
+        return Vec::new();
+    };
+    output
+        .lines()
+        .skip(1)
+        .filter_map(|line| {
+            let mut columns = line.split_whitespace();
+            let serial = columns.next()?;
+            // skip the empty lines, a valid line is like: "emulator-5554    device"
+            columns.next()?;
+            Some(serial.to_string())
+        })
+        .collect()
+}
+
+fn device_connection_error(serial: &Option<String>) -> String {
+    if let Some(serial) = serial {
+        return format!("Failed to connect to device: {}", serial);
+    }
+    let devices = connected_devices();
+    if devices.len() > 1 {
+        return format!(
+            "More than one device connected: {}, please specify one with -s <SERIAL>",
+            devices.join(", ")
+        );
+    }
+    "Failed to connect to device".to_string()
+}
+
+fn is_device_connected(adb: &str) -> bool {
+    let std::result::Result::Ok(state) = execute(format!("{} get-state", adb)) else {
         return false;
     };
     return state.0 && state.1.trim() == "device";
 }
 
 // adb shell su -c   or   adb shell su root
-fn get_root_cmd() -> String {
-    let su_result = execute("adb shell su -v").unwrap_or_else(|_| {
+fn get_root_cmd(adb: &str) -> String {
+    let su_result = execute(format!("{} shell su -v", adb)).unwrap_or_else(|_| {
         return (false, "unknow".to_string());
     });
 
@@ -192,9 +244,9 @@ fn get_root_cmd() -> String {
     };
 }
 
-fn is_32_bit_app(package_name: &str) -> bool {
+fn is_32_bit_app(adb: &str, package_name: &str) -> bool {
     let pm_path_result =
-        execute(format!("adb shell pm path {}", package_name)).unwrap_or_else(|_| {
+        execute(format!("{} shell pm path {}", adb, package_name)).unwrap_or_else(|_| {
             return (false, "".to_string());
         });
 
@@ -215,8 +267,8 @@ fn is_32_bit_app(package_name: &str) -> bool {
     let mut is_32_bit_app = false;
 
     let command = format!(
-        "adb shell 'if [ -d {}/lib/oat ]; then echo \"exists\"; else echo \"not exists\"; fi'",
-        installed_directory
+        "{} shell 'if [ -d {}/lib/oat ]; then echo \"exists\"; else echo \"not exists\"; fi'",
+        adb, installed_directory
     );
 
     let dir_exist_result = execute(command).unwrap_or((false, "".to_string()));
@@ -225,8 +277,8 @@ fn is_32_bit_app(package_name: &str) -> bool {
         is_32_bit_app = true;
     } else {
         let command = format!(
-            "adb shell 'if [ -d {}/lib/arm ]; then echo \"exists\"; else echo \"not exists\"; fi'",
-            installed_directory
+            "{} shell 'if [ -d {}/lib/arm ]; then echo \"exists\"; else echo \"not exists\"; fi'",
+            adb, installed_directory
         );
         let dir_exist_result = execute(command).unwrap_or((false, "".to_string()));
         if dir_exist_result.0 && dir_exist_result.1.trim() == "exists" {

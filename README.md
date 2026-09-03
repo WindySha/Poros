@@ -36,8 +36,15 @@ Options:
   -f, --file-path <FILE_PATH>        path of the xposed plugin to inject
   -q, --quick                        whether use the quick mode
   -n, --non-ptrace                   whether use the non-ptrace mode
+  -m, --main-thread-injection        whether inject the plugin on the main thread
+  -r, --restart                      whether restart the app before injection
+  -s, --serial <SERIAL>              serial number of the target device, the same as `adb -s <SERIAL>`, it can be ignored when only one device is connected
   -h, --help                         Print help
   -V, --version                      Print version
+```
+Use the `-s` parameter to select the target device when more than one device is connected, just like the `adb -s <SERIAL>` command:
+```
+$ poros-Darwin-x86_64 -s emulator-5554 -p com.android.settings -f ./xposed_module_sample.apk
 ```
 ### Using shell file
 1. Download the `poros_shell_cmd.tar.gz` file on the release page, and unzip it;
